@@ -1,0 +1,29 @@
+# Flutter / Dart
+/build/
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+generated_plugin_registrant.dart
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+crash_log.txt
+crash_only.txt
+flutter_log*.txt
+
+# Secrets (uncomment if you want to hide API keys)
+# google-services.json
+# GoogleService-Info.plist
+# firebase_options.dart

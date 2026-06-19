@@ -1,0 +1,61 @@
+name: grow_wiser
+description: Smart Irrigation System App
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies: 
+  mobile_scanner: ^5.2.3
+   # Firebase
+  firebase_core: ^3.0.0
+  firebase_auth: ^5.0.0
+  cloud_firestore: ^5.0.0
+  firebase_database: ^11.0.0
+
+  # MQTT (Mosquitto compatible)
+  mqtt_client: ^10.0.0
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Utils
+  uuid: ^4.3.3
+  logger: ^2.3.0
+
+  geolocator: ^12.0.0
+  http: ^1.2.0
+
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  fonts:
+    - family: ClashDisplay
+      fonts:
+        - asset: assets/fonts/ClashDisplay-Variable.ttf
+
+    - family: Erode
+      fonts:
+        - asset: assets/fonts/Erode-Variable.ttf
+        - asset: assets/fonts/Erode-VariableItalic.ttf
+          style: italic
+
+    - family: Satoshi
+      fonts:
+        - asset: assets/fonts/Satoshi-Variable.ttf
+        - asset: assets/fonts/Satoshi-VariableItalic.ttf
+          style: italic
+
+  assets:
+    - assets/
