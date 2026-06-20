@@ -1,4 +1,4 @@
-
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -122,10 +122,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     }
   }
 
-  // CHANGE: _handleSignup is now async
-  Future<void> _handleSignup() async {
-
-    List<String> _validatePassword(String password) {
+  List<String> _validatePassword(String password) {
   final errors = <String>[];
   if (password.length < 8)
     errors.add('At least 8 characters long.');
@@ -156,6 +153,14 @@ void _showPasswordErrorPopup(List<String> errors) {
   );
 }
 
+  // CHANGE: _handleSignup is now async
+  Future<void> _handleSignup
+  ({
+  required String verificationId,
+  required String smsCode,
+}) async {
+
+
       final passwordErrors = _validatePassword(_passwordCtrl.text);
   if (passwordErrors.isNotEmpty) {
     _showPasswordErrorPopup(passwordErrors);
@@ -164,30 +169,31 @@ void _showPasswordErrorPopup(List<String> errors) {
 
   
     setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    _isLoading = true;
+    _errorMessage = null;
+  });
 
-    try {
-      await BackendService().signUp(
-        _emailCtrl.text.trim(),
-        _passwordCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim(), 
+  try {
+    await BackendService().signUp(
+      _emailCtrl.text.trim(),
+      _passwordCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
+      verificationId: verificationId,
+      smsCode: smsCode,
+    );
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DashboardPage()),
       );
-
-      // After signup, go straight to dashboard (new users are never admin)
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const DashboardPage()),
-        );
-      }
-    } on Exception catch (e) {
-      setState(() => _errorMessage = _friendlyError(e.toString()));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
+  } on Exception catch (e) {
+    setState(() => _errorMessage = _friendlyError(e.toString()));
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
 
   // NEW: converts raw Firebase error strings into readable messages
   // Why: Firebase exceptions contain long internal strings like
@@ -239,7 +245,8 @@ void _showPasswordErrorPopup(List<String> errors) {
                 codeCtrl: _codeCtrl,
                 passwordCtrl: _passwordCtrl,
                 confirmCtrl: _confirmCtrl,
-                onSignup: _handleSignup,
+                onSignup: ({required String verificationId, required String smsCode}) =>
+                _handleSignup(verificationId: verificationId, smsCode: smsCode),
                 isLogin: _isLogin,
                 onSwitch: _switchTab,
                 isLoading: _isLoading,
@@ -373,7 +380,10 @@ class _LoginContent extends StatelessWidget {
 
 class _RegisterContent extends StatefulWidget {
   final TextEditingController emailCtrl,phoneCtrl, codeCtrl, passwordCtrl, confirmCtrl;
-  final VoidCallback onSignup;
+  final Future<void> Function({
+  required String verificationId,
+  required String smsCode,
+}) onSignup;
   final bool isLogin;
   final ValueChanged<bool> onSwitch;
   final bool isLoading;
@@ -402,8 +412,10 @@ class _RegisterContent extends StatefulWidget {
   bool _otpSent = false;
   bool _otpVerified = false;
   bool _sendingOtp = false;
-  String? _generatedOtp;
   String? _otpError;
+String? _verificationId; 
+String? _verifiedSmsCode;
+int? _resendToken;  
 
   // Simulated OTP send — generates a fake 6-digit code and prints to console
   Future<void> _sendOtp() async {
@@ -415,53 +427,137 @@ class _RegisterContent extends StatefulWidget {
     return;
   }
 
+  // Phone numbers must be in E.164 format: +60123456789
+  if (!phone.startsWith('+')) {
+    setState(() => _otpError = 'Include country code e.g. +60123456789');
+    return;
+  }
+
   setState(() {
     _sendingOtp = true;
     _otpError = null;
   });
 
-  // Check both email and phone before sending OTP
-  final emailExists = email.isNotEmpty
+  // Check duplicates first (your existing logic)
+  bool emailExists = false;
+bool phoneExists = false;
+try {
+  emailExists = email.isNotEmpty
       ? await BackendService().isEmailRegistered(email)
       : false;
-  final phoneExists = await BackendService().isPhoneRegistered(phone);
+  phoneExists = await BackendService().isPhoneRegistered(phone);
+} catch (_) {
+  // Firestore rules blocked the check — skip duplicate check,
+  // Firebase Auth will catch duplicates on actual signup anyway
+}
 
   if (emailExists || phoneExists) {
     setState(() => _sendingOtp = false);
     if (mounted) {
-      _showAlreadyRegisteredPopup(
-        reason: emailExists ? 'email' : 'phone',
-      );
+      _showAlreadyRegisteredPopup(reason: emailExists ? 'email' : 'phone');
     }
     return;
   }
+  
 
-  await Future.delayed(const Duration(seconds: 1));
 
-  final otp = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000))
-      .toString()
-      .substring(0, 6);
-  _generatedOtp = otp;
-  debugPrint('==== SIMULATED OTP: $otp ====');
+  // Send OTP via Firebase
+  await FirebaseAuth.instance.verifyPhoneNumber(
+    phoneNumber: phone,
+    forceResendingToken: _resendToken,
+    timeout: const Duration(seconds: 60),
+  verificationCompleted: (PhoneAuthCredential credential) async {
+    if (mounted) {
+      setState(() {
+        _otpVerified = true;
+        _otpSent = true;
+        _sendingOtp = false;
+        _otpError = null;
+      });
+    }
+  },
+  verificationFailed: (FirebaseAuthException e) {
+    if (mounted) {
+      setState(() {
+        _sendingOtp = false;
+        _otpError = _friendlyPhoneError(e.code);
+      });
+    }
+  },
+  codeSent: (String verificationId, int? resendToken) {
+    if (mounted) {
+      setState(() {
+        _verificationId = verificationId;
+        _resendToken = resendToken;
+        _otpSent = true;
+        _sendingOtp = false;
+      });
+    }
+  },
+  codeAutoRetrievalTimeout: (String verificationId) {
+    _verificationId = verificationId;
+    // Safety: stop spinner if somehow nothing else fired
+    if (mounted && _sendingOtp) {
+      setState(() => _sendingOtp = false);
+    }
+  },
+);
+
+// Safety net — if after 65 seconds nothing happened, stop the spinner
+Future.delayed(const Duration(seconds: 65), () {
+  if (mounted && _sendingOtp) {
+    setState(() {
+      _sendingOtp = false;
+      _otpError = 'Request timed out. Check your number and try again.';
+    });
+  }
+});
+
+
+}
+
+
+ Future<void> _verifyOtp() async {
+  if (_verificationId == null) {
+    setState(() => _otpError = 'Please request a code first.');
+    return;
+  }
+
+  final code = widget.codeCtrl.text.trim();
+  if (code.length != 6) {
+    setState(() => _otpError = 'Enter the 6-digit code.');
+    return;
+  }
+
+  setState(() {
+    _sendingOtp = true;
+    _otpError = null;
+  });
+
+   _verifiedSmsCode = code;
 
   if (mounted) {
     setState(() {
-      _otpSent = true;
+      _otpVerified = true;
       _sendingOtp = false;
     });
   }
 }
 
-  void _verifyOtp() {
-    if (widget.codeCtrl.text.trim() == _generatedOtp) {
-      setState(() {
-        _otpVerified = true;
-        _otpError = null;
-      });
-    } else {
-      setState(() => _otpError = 'Incorrect code. Try again.');
-    }
+String _friendlyPhoneError(String code) {
+  switch (code) {
+    case 'invalid-phone-number':
+      return 'Invalid phone number. Include country code e.g. +601X.';
+    case 'too-many-requests':
+      return 'Too many attempts. Try again later.';
+    case 'quota-exceeded':
+      return 'SMS quota exceeded. Try again later.';
+    case 'network-request-failed':
+      return 'No internet connection.';
+    default:
+      return 'Could not send OTP. Try again.';
   }
+}
 
   void _showAlreadyRegisteredPopup({required String reason}) {
     showDialog(
@@ -631,14 +727,16 @@ class _RegisterContent extends StatefulWidget {
                           margin: const EdgeInsets.symmetric(horizontal: 40),
                           width: 270,
                           child: LoginButton(
-                          label: 'SIGN UP',
-                          onTap: _otpVerified
-                        ? widget.onSignup
-                             : () {
-                                          setState(() => _otpError =
-                                              'Please verify your phone first.');
-                                        },
-                                ),
+  label: 'SIGN UP',
+  onTap: _otpVerified
+      ? () => widget.onSignup(
+            verificationId: _verificationId!,
+            smsCode: _verifiedSmsCode!,
+          )
+      : () {
+          setState(() => _otpError = 'Please verify your phone first.');
+        },
+),
                         ),
                       ],
                     ),

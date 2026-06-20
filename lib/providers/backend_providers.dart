@@ -5,6 +5,7 @@ import '../models/device.dart';
 import '../models/sensor_data.dart';
 import '../services/backend_service.dart';
 import 'package:flutter/material.dart';
+import 'package:mqtt_client/mqtt_client.dart';
 
 // Auth state stream
 final authStateProvider = StreamProvider<User?>((ref) {
@@ -116,4 +117,28 @@ final mqttAutoSubscriptionProvider = Provider<void>((ref) {
     BackendService().subscribeToAllDevices(devices);
   });
   return;
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// MQTT MESSAGE HANDLER
+// Listens to all incoming MQTT messages and routes error topics to Firestore
+// ══════════════════════════════════════════════════════════════════════════
+
+final mqttMessageHandlerProvider = Provider<void>((ref) {
+  // Re-runs whenever devices change (ensures client is ready)
+  ref.watch(mqttAutoSubscriptionProvider);
+
+  final client = BackendService().mqttClient;
+  if (client == null) return;
+
+  client.updates?.listen((messages) {
+    for (final msg in messages) {
+      final topic = msg.topic;
+      final rawPayload = msg.payload as MqttPublishMessage;
+      final payload = MqttPublishPayload.bytesToStringAsString(
+        rawPayload.payload.message,
+      );
+      BackendService().handleIncomingMqttMessage(topic, payload);
+    }
+  });
 });

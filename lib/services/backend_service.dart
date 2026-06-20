@@ -39,6 +39,7 @@ class BackendService {
 
   // ─── MQTT ─────────────────────────────────────────────────────────────────
   MqttServerClient? _mqttClient;
+  MqttServerClient? get mqttClient => _mqttClient;
 
   // Reconnect state
   String? _lastBrokerHost;
@@ -70,22 +71,29 @@ class BackendService {
         email: email, password: password);
   }
 
-  Future<UserCredential> signUp(String email, String password,
-      {String phone = ''}) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
-        email: email, password: password);
-    final uid = credential.user?.uid;
-    if (uid != null) {
-      await _firestore.collection('users').doc(uid).set({
-        'user_id': uid,
-        'username': email.split('@')[0],
-        'email_address': email,
-        'phone': phone,
-        'role': 'user',
-      });
-    }
-    return credential;
+  Future<void> signUp(String email, String password,
+      {
+  String? phone,
+  String? verificationId,
+  String? smsCode,
+}) async {
+      final result = await  _auth.createUserWithEmailAndPassword(email: email, password: password);
+
+  // Link phone credential if provided
+  if (verificationId != null && smsCode != null) {
+    final phoneCredential = PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode,
+    );
+    await result.user?.linkWithCredential(phoneCredential);
   }
+       await _firestore.collection('users').doc(result.user!.uid).set({
+    'email': email,
+    'phone': phone ?? '',
+    'role': 'user',
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+}
 
   Future<void> signOut() async {
     _cancelReconnect();
@@ -126,6 +134,7 @@ void subscribeToDevice(String deviceId) {
 void _subscribeToDeviceInternal(String deviceId) {
   _mqttClient!.subscribe('growwiser/$deviceId/sensors', MqttQos.atLeastOnce);
   _mqttClient!.subscribe('growwiser/$deviceId/status', MqttQos.atLeastOnce);
+  _mqttClient!.subscribe('growwiser/$deviceId/errors', MqttQos.atLeastOnce);
   _logger.i('Subscribed to device $deviceId');
 }
 
@@ -778,23 +787,38 @@ Future<Map<String, dynamic>?> geocodeCity(String cityName) async {
   Future<void> logDeviceError({
     required String deviceId,
     required String errorCode,
+     String detail = '—',
+  String severity = 'warning',
   }) async {
     final uid = currentUser?.uid;
     if (uid == null) return;
 
+     final ownerSnap = await _rtdb.child('Devices/$deviceId/ownerId').get();
+    final ownerId = ownerSnap.value as String? ?? uid;
+
     await _firestore
         .collection('users')
-        .doc(uid)
+        .doc(ownerId)
         .collection('devices')
         .doc(deviceId)
         .collection('errors')
         .add({
       'device_id': deviceId,
       'error_code': errorCode,
-      'count': 1,
+      'detail': detail,
+    'severity': severity,
       'resolved': false,
       'created_at': FieldValue.serverTimestamp(),
     });
+
+     await _rtdb.child('Devices/$deviceId/lastError').set({
+    'code': errorCode,
+    'detail': detail,
+    'severity': severity,
+    'timestamp': ServerValue.timestamp,
+     });
+
+  _logger.w('Error logged for $deviceId: $errorCode — $detail');
   }
 
   Future<bool> isPhoneRegistered(String phone) async {
@@ -809,7 +833,7 @@ Future<Map<String, dynamic>?> geocodeCity(String cityName) async {
   Future<bool> isEmailRegistered(String email) async {
     final snap = await _firestore
         .collection('users')
-        .where('email_address', isEqualTo: email)
+        .where('email', isEqualTo: email)
         .limit(1)
         .get();
     return snap.docs.isNotEmpty;
@@ -1072,6 +1096,37 @@ if (baseRate <= minRealRate) {
     debugPrint(' predictNextWaterTime error: $e');
     debugPrint(' Stack: $st');
     return null;
+  }
+}
+
+void subscribeToDeviceErrors(String deviceId) {
+  if (!mqttConnected) {
+    _pendingSubscriptions.add('$deviceId/errors');
+    return;
+  }
+  _mqttClient!.subscribe(
+    'growwiser/$deviceId/errors',
+    MqttQos.atLeastOnce,
+  );
+  _logger.i('Subscribed to errors for $deviceId');
+}
+
+Future<void> handleIncomingMqttMessage(String topic, String payload) async {
+  // Check if this is an error topic
+  final errorMatch = RegExp(r'growwiser/(.+)/errors').firstMatch(topic);
+  if (errorMatch != null) {
+    final deviceId = errorMatch.group(1)!;
+    try {
+      final data = jsonDecode(payload) as Map<String, dynamic>;
+      await logDeviceError(
+        deviceId: deviceId,
+        errorCode: data['code'] as String? ?? 'UNKNOWN',
+        detail: data['detail'] as String? ?? '—',
+        severity: data['severity'] as String? ?? 'warning',
+      );
+    } catch (e) {
+      _logger.e('Failed to parse error payload: $e');
+    }
   }
 }
 }

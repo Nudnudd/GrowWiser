@@ -813,19 +813,19 @@ class _DevicesMainCard extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
+                    color: Colors.white.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.2)),
+                        color: Colors.white.withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.keyboard,
-                          size: 14, color: Colors.white70),
+                          size: 14, color: Color.fromARGB(233, 255, 255, 255)),
                       const SizedBox(width: 8),
                       Text('ENTER DEVICE ID MANUALLY',
-                          style: AppTextStyles.mono(10, Colors.white70,
+                          style: AppTextStyles.mono(10, AppColors.deepGreen,
                               letterSpacing: 1, weight: FontWeight.w600)),
                     ],
                   ),

@@ -27,7 +27,7 @@ class _CommandPageState extends ConsumerState<CommandPage> {
   void initState() {
     super.initState();
     _loadAdminStatus();
-    _loadDevices();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadDevices());
   }
 
   Future<void> _loadAdminStatus() async {
@@ -60,6 +60,22 @@ setState(() {
 
   Future<void> _handleWaterNow() async {
   if (_activeDeviceId == null || _activeDeviceId == 'no-device') return;
+    if (!BackendService().mqttConnected) {
+    try {
+      await BackendService().connectMqtt(
+        brokerHost: 'broker.hivemq.com', // ← see hardcoded data below
+        port: 1883,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Broker unreachable', style: AppTextStyles.mono(12, Colors.white)),
+          backgroundColor: Colors.redAccent),
+        );
+      }
+      return;
+    }
+  }
     setState(() => _isCommandLoading = true);
     try {
       await BackendService().sendPumpCommand(_activeDeviceId!, true);
@@ -79,7 +95,7 @@ setState(() {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Command failed: \$e',
+            content: Text('Command failed: $e',
                 style: AppTextStyles.mono(12, Colors.white)),
             backgroundColor: Colors.redAccent,
           ),
@@ -221,29 +237,42 @@ class _TopRow extends StatelessWidget {
         children: [
           const _OrbWidget(mode: null),
           const Spacer(),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'SUN , 7 MARCH',
-                style: AppTextStyles.mono(
-                  13,
-                  AppColors.textPrimary.withValues(alpha: 0.6),
-                  letterSpacing: 2,
-                  weight: FontWeight.w500,
-                ),
-              ),
-              Text(
-                '18:30',
-                style: AppTextStyles.headline(
-                  36,
-                  AppColors.textPrimary,
-                  letterSpacing: 1,
-                  weight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
+        Column(
+  crossAxisAlignment: CrossAxisAlignment.end,
+  children: [
+    Builder(builder: (context) {
+      final now = DateTime.now();
+      final days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+      final months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 
+                      'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+      final dayName = days[now.weekday - 1];
+      final monthName = months[now.month - 1];
+      return Text(
+        '$dayName, ${now.day} $monthName',
+        style: AppTextStyles.mono(
+          13,
+          AppColors.textPrimary.withValues(alpha: 0.6),
+          letterSpacing: 2,
+          weight: FontWeight.w500,
+        ),
+      );
+    }),
+    Builder(builder: (context) {
+      final now = DateTime.now();
+      final hour = now.hour.toString().padLeft(2, '0');
+      final minute = now.minute.toString().padLeft(2, '0');
+      return Text(
+        '$hour:$minute',
+        style: AppTextStyles.headline(
+          36,
+          AppColors.textPrimary,
+          letterSpacing: 1,
+          weight: FontWeight.w900,
+        ),
+      );
+    }),
+  ],
+),
         ],
       ),
     );
@@ -582,7 +611,7 @@ class _CommandCard extends StatelessWidget {
     final hour = dt.hour;
     final suffix = hour >= 12 ? 'P.M' : 'A.M';
     final display = hour % 12 == 0 ? 12 : hour % 12;
-    return 'Last watered: \$display \$suffix';
+    return 'Last watered: $display $suffix';
   }
 
   @override
@@ -618,7 +647,7 @@ class _CommandCard extends StatelessWidget {
               Positioned(
                   top: 11,
                   left: 13,
-                  child: Text('GW-01',
+                  child: Text(selectedZone.toUpperCase(),
                       style: AppTextStyles.mono(10, _tagColor, weight: FontWeight.w600))),
               Positioned(
                   top: 11,
@@ -1281,7 +1310,7 @@ class _ThresholdChips extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '90%',
+                  '80%',
                   style: AppTextStyles.headline(
                     15,
                     const Color(0xFFE4F27A),

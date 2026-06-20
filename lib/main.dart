@@ -41,6 +41,7 @@ class GrowWiserApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
 
     ref.watch(mqttAutoSubscriptionProvider);
+    ref.watch(mqttMessageHandlerProvider);
     
     return MaterialApp(
       title: 'Grow Wiser',
