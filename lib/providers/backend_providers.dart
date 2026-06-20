@@ -9,13 +9,19 @@ import 'package:mqtt_client/mqtt_client.dart';
 
 // Auth state stream
 final authStateProvider = StreamProvider<User?>((ref) {
-  return BackendService().authStateChanges;
+  return FirebaseAuth.instance.authStateChanges();
 });
 
-// All devices for current user
 final userDevicesProvider = StreamProvider<List<DeviceModel>>((ref) {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return Stream.value([]);
+  // Watch auth state — provider rebuilds when user signs in/out
+  final user = ref.watch(authStateProvider).valueOrNull;
+  
+  if (user == null) {
+    return Stream.value([]);
+  }
+
+  final uid = user.uid;
+  print('userDevicesProvider: subscribing to UserDevices/$uid');
 
   return FirebaseDatabase.instance
       .ref('UserDevices/$uid')
@@ -40,8 +46,7 @@ final userDevicesProvider = StreamProvider<List<DeviceModel>>((ref) {
       }
     }
     return devices;
-  })
-  .handleError((e) {
+  }).handleError((e) {
     debugPrint('userDevicesProvider error: $e');
     return <DeviceModel>[];
   });

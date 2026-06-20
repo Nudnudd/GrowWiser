@@ -173,6 +173,7 @@ void _showPasswordErrorPopup(List<String> errors) {
     _errorMessage = null;
   });
 
+  String? error;
   try {
     await BackendService().signUp(
       _emailCtrl.text.trim(),
@@ -187,11 +188,15 @@ void _showPasswordErrorPopup(List<String> errors) {
         context,
         MaterialPageRoute(builder: (_) => const DashboardPage()),
       );
+      return;
     }
   } on Exception catch (e) {
-    setState(() => _errorMessage = _friendlyError(e.toString()));
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
+    error = _friendlyError(e.toString());
+  } if (mounted) {
+    setState(() {
+      _isLoading = false;
+      _errorMessage = error;
+    });
   }
 }
 
@@ -517,7 +522,7 @@ Future.delayed(const Duration(seconds: 65), () {
 }
 
 
- Future<void> _verifyOtp() async {
+Future<void> _verifyOtp() async {
   if (_verificationId == null) {
     setState(() => _otpError = 'Please request a code first.');
     return;
@@ -534,7 +539,8 @@ Future.delayed(const Duration(seconds: 65), () {
     _otpError = null;
   });
 
-   _verifiedSmsCode = code;
+  // Just store the code — don't sign in, don't consume the credential
+  _verifiedSmsCode = code;
 
   if (mounted) {
     setState(() {

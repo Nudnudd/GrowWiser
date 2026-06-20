@@ -128,7 +128,7 @@ class _AdminPageState extends ConsumerState<AdminPage> {
                         ? const _NoErrorCard()
                         : _ErrorCard(
                             errorCode: error['error_code'] ?? '—',
-                            errorDetail: error['error_code'] ?? '—',
+                            errorDetail: error['error_message'] ?? error['detail'] ?? '—',
                             errorTime: error['created_at'] != null
                                 ? _formatTimestamp(
                                     error['created_at'] as Timestamp)
@@ -459,17 +459,17 @@ class _NoErrorCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A3A1A),
+        color: AppColors.deepGreen,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+        border: Border.all(color:const Color(0xFFE4F27A).withOpacity(0.3)),
       ),
       child: Row(
         children: [
           const Icon(Icons.check_circle_outline,
-              color: Colors.greenAccent, size: 20),
+              color: Color(0xFFE4F27A), size: 20),
           const SizedBox(width: 10),
           Text('No errors logged.',
-              style: AppTextStyles.mono(11, Colors.greenAccent,
+              style: AppTextStyles.mono(11,const Color(0xFFE4F27A),
                   weight: FontWeight.w600)),
         ],
       ),
@@ -509,14 +509,14 @@ class _PublishButton extends StatelessWidget {
                   ? const Padding(
                       padding: EdgeInsets.all(8),
                       child: CircularProgressIndicator(
-                          color: Color(0xFFA0E0A0), strokeWidth: 2),
+                          color: Color(0xFFE4F27A), strokeWidth: 2),
                     )
                   : const Icon(Icons.upload_outlined,
-                      color: Color(0xFFA0E0A0), size: 20),
+                      color: Color(0xFFE4F27A), size: 20),
             ),
             const SizedBox(width: 12),
             Text('PUBLISH NEW VERSION',
-                style: AppTextStyles.headline(18, const Color(0xFFC8F0C8),
+                style: AppTextStyles.headline(18, const Color(0xFFE4F27A),
                     letterSpacing: 2)),
           ],
         ),

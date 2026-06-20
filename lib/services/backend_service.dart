@@ -71,35 +71,61 @@ class BackendService {
         email: email, password: password);
   }
 
-  Future<void> signUp(String email, String password,
-      {
+  Future<void> signUp(String email, String password, {
   String? phone,
   String? verificationId,
   String? smsCode,
 }) async {
-      final result = await  _auth.createUserWithEmailAndPassword(email: email, password: password);
+  print(' SIGNUP: Creating auth user...');
+  
+  final result = await _auth.createUserWithEmailAndPassword(
+    email: email, 
+    password: password,
+  );
+  print(' SIGNUP: Auth user created = ${result.user?.uid}');
 
-  // Link phone credential if provided
+  // Try to link phone with a timeout — don't let it hang forever
   if (verificationId != null && smsCode != null) {
-    final phoneCredential = PhoneAuthProvider.credential(
-      verificationId: verificationId,
-      smsCode: smsCode,
-    );
-    await result.user?.linkWithCredential(phoneCredential);
+    print(' SIGNUP: Linking phone...');
+    try {
+      final phoneCredential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: smsCode,
+      );
+      
+      // Add timeout so it doesn't hang
+      await result.user
+          ?.linkWithCredential(phoneCredential)
+          .timeout(const Duration(seconds: 10));
+          
+      print(' SIGNUP: Phone linked');
+    } on TimeoutException {
+      print(' SIGNUP: Phone link TIMED OUT');
+    } on FirebaseAuthException catch (e) {
+      print(' SIGNUP: Phone link FAILED: ${e.code} - ${e.message}');
+    }
   }
-       await _firestore.collection('users').doc(result.user!.uid).set({
-    'email': email,
-    'phone': phone ?? '',
-    'role': 'user',
-    'createdAt': FieldValue.serverTimestamp(),
-  });
-}
 
-  Future<void> signOut() async {
-    _cancelReconnect();
-    await _disconnectMqtt();
-    await _auth.signOut();
+  final uid = result.user?.uid;
+  if (uid == null) {
+    print(' SIGNUP: ERROR - user is null after creation!');
+    throw Exception('User creation failed');
   }
+
+  print(' SIGNUP: Writing to Firestore users/$uid');
+  try {
+    await _firestore.collection('users').doc(uid).set({
+      'email': email,
+      'phone': phone ?? '',
+      'role': 'user',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    print(' SIGNUP: Firestore write SUCCESS');
+  } catch (e) {
+    print(' SIGNUP: Firestore write FAILED: $e');
+    rethrow;
+  }
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 // MQTT AUTO-SUBSCRIPTION
