@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_Theme.dart';
 import '../services/backend_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ══════════════════════════════════════════════════════════════════════════
 // PROVIDERS
@@ -51,7 +52,6 @@ class AdminPage extends ConsumerStatefulWidget {
 class _AdminPageState extends ConsumerState<AdminPage> {
   final int _currentIndex = 0;
   final bool _isAdmin = true;
-  bool _isPublishing = false;
 
   Future<void> _resolveError(String docPath) async {
   await FirebaseFirestore.instance
@@ -76,21 +76,26 @@ class _AdminPageState extends ConsumerState<AdminPage> {
   }
 
   Future<void> _handlePublish() async {
-    setState(() => _isPublishing = true);
-    // Placeholder — wire up your actual publish logic here
-    await Future.delayed(const Duration(seconds: 2));
+  const repoUrl = 'https://github.com/Nudnudd/GrowWiser';
+  
+  try {
+    await launchUrl(
+      Uri.parse(repoUrl),
+      mode: LaunchMode.externalApplication,
+    );
+  } catch (e) {
     if (mounted) {
-      setState(() => _isPublishing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Published successfully.',
+          content: Text('Could not open repo: $e',
               style: AppTextStyles.mono(12, Colors.white)),
-          backgroundColor: AppColors.deepGreen,
-          duration: const Duration(seconds: 2),
+          backgroundColor: Colors.redAccent,
         ),
       );
     }
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +170,7 @@ class _AdminPageState extends ConsumerState<AdminPage> {
                   const SizedBox(height: 10),
 
                   _PublishButton(
-                    isLoading: _isPublishing,
+                    isLoading: false,
                     onTap: _handlePublish,
                   ),
 
@@ -182,26 +187,31 @@ class _AdminPageState extends ConsumerState<AdminPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         // System health — derived from error count
-                        errorCountAsync.when(
-                          loading: () => _StatRow(
-                            icon: 'assets/health.png',
-                            label: 'SYSTEM HEALTH',
-                            date: _todayStr(),
-                            value: '...',
-                          ),
-                          error: (_, __) => _StatRow(
-                            icon: 'assets/health.png',
-                            label: 'SYSTEM HEALTH',
-                            date: _todayStr(),
-                            value: '—',
-                          ),
-                          data: (count) => _StatRow(
-                            icon: 'assets/health.png',
-                            label: 'SYSTEM HEALTH',
-                            date: _todayStr(),
-                            value: count == 0 ? '100%' : 'DEGRADED',
-                          ),
-                        ),
+                       errorCountAsync.when(
+  loading: () => _StatRow(
+    icon: 'assets/health.png',
+    label: 'SYSTEM HEALTH',
+    date: _todayStr(),
+    value: '...',
+  ),
+  error: (_, __) => _StatRow(
+    icon: 'assets/health.png',
+    label: 'SYSTEM HEALTH',
+    date: _todayStr(),
+    value: '—',
+  ),
+  data: (count) {
+    final health = (100.0 - (count * 0.2)).clamp(0.0, 100.0);
+    final healthStr = health <= 0 ? 'CRITICAL' : '${health.toStringAsFixed(1)}%';
+    
+    return _StatRow(
+      icon: 'assets/health.png',
+      label: 'SYSTEM HEALTH',
+      date: _todayStr(),
+      value: healthStr,
+    );
+  },
+),
                         const SizedBox(height: 8),
 
                         // Unresolved errors count
@@ -511,11 +521,11 @@ class _PublishButton extends StatelessWidget {
                       child: CircularProgressIndicator(
                           color: Color(0xFFE4F27A), strokeWidth: 2),
                     )
-                  : const Icon(Icons.upload_outlined,
+                  : const Icon(Icons.open_in_new,  // Changed icon
                       color: Color(0xFFE4F27A), size: 20),
             ),
             const SizedBox(width: 12),
-            Text('PUBLISH NEW VERSION',
+            Text('OPEN GITHUB REPO',  // Changed label
                 style: AppTextStyles.headline(18, const Color(0xFFE4F27A),
                     letterSpacing: 2)),
           ],
@@ -580,10 +590,11 @@ class _StatRow extends StatelessWidget {
           ),
           Text(
             value,
-            style: smallValue
+            style: (smallValue
                 ? AppTextStyles.mono(18, AppColors.white,
                     weight: FontWeight.bold)
-                : AppTextStyles.headline(26, AppColors.white, letterSpacing: 1),
+                : AppTextStyles.headline(26,  AppColors.white, 
+                    letterSpacing: 1)),
           ),
         ],
       ),

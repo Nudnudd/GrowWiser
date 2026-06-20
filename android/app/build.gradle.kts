@@ -6,31 +6,29 @@ plugins {
 }
 
 android {
-   
-
     namespace = "com.sharvindra.grow_wiser"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    compileSdk = 36
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+     kotlinOptions {
+        jvmTarget = "17"
     }
-    
-     packaging {
-    jniLibs {
-        useLegacyPackaging = true
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
-     }
 
     defaultConfig {
         applicationId = "com.sharvindra.grow_wiser"
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
@@ -43,7 +41,6 @@ android {
     }
 }
 
-
 flutter {
     source = "../.."
 }
@@ -52,9 +49,9 @@ dependencies {
     // Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:34.13.0"))
 
-    // Example Firebase services
+    // Firebase services
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-database") 
+    implementation("com.google.firebase:firebase-database")
 }

@@ -6,6 +6,7 @@ import '../services/backend_service.dart';
 import '../providers/backend_providers.dart';
 import '../models/device.dart';
 import 'dart:convert';
+import 'dart:async';
 
 // ══════════════════════════════════════════════════════════════════════════
 // DEVICES PAGE
@@ -326,7 +327,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
             bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Container(
           decoration: const BoxDecoration(
-            color: AppColors.seaGreen,
+            color:  Color(0xFF0D1F1A),
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -348,8 +349,8 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(device.name,
-                        style: AppTextStyles.headline(16, AppColors.textPrimary,
+                    child: Text(device.name.toUpperCase(),
+                        style: AppTextStyles.headline(18, AppColors.textPrimary,
                             weight: FontWeight.bold)),
                   ),
                   Container(
@@ -367,7 +368,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                             size: 12, color: Color(0xFFE4F27A)),
                         const SizedBox(width: 4),
                         Text('EDIT',
-                            style: AppTextStyles.mono(9, const Color(0xFFE4F27A),
+                            style: AppTextStyles.mono(10, const Color(0xFFE4F27A),
                                 letterSpacing: 0.5)),
                       ],
                     ),
@@ -376,28 +377,28 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
               ),
               Text(
                 '${device.location.isEmpty ? '—' : device.location} · Added recently',
-                style: AppTextStyles.mono(10,
-                    AppColors.textPrimary.withValues(alpha: 0.45)),
+                style: AppTextStyles.mono(13,
+                    AppColors.textPrimary.withValues(alpha: 0.8)),
               ),
               const SizedBox(height: 16),
               Text('DEVICE NAME',
-                  style: AppTextStyles.mono(9,
-                      AppColors.textPrimary.withValues(alpha: 0.45),
+                  style: AppTextStyles.mono(11,
+                      AppColors.textPrimary.withValues(alpha: 0.8),
                       letterSpacing: 0.5)),
               const SizedBox(height: 4),
               TextField(
                 controller: nameCtrl,
-                style: AppTextStyles.mono(13, AppColors.textPrimary),
+                style: AppTextStyles.mono(13, AppColors.textPrimary,weight: FontWeight.bold),
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: Colors.black.withValues(alpha: 0.2),
+                  fillColor: Colors.white24,
                   hintText: 'e.g. Garden Sensor 1',
                   hintStyle: AppTextStyles.mono(13,
-                      AppColors.textPrimary.withValues(alpha: 0.3)),
+                      AppColors.textPrimary.withValues(alpha: 0.8),weight: FontWeight.bold),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(
-                        color: const Color(0xFFE4F27A).withValues(alpha: 0.4)),
+                        color: const Color(0xFFE4F27A).withValues(alpha: 0.8)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -413,19 +414,19 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
               ),
               const SizedBox(height: 10),
               Text('LOCATION',
-                  style: AppTextStyles.mono(9,
-                      AppColors.textPrimary.withValues(alpha: 0.45),
+                  style: AppTextStyles.mono(11,
+                      AppColors.textPrimary.withValues(alpha: 0.8),
                       letterSpacing: 0.5)),
               const SizedBox(height: 4),
               TextField(
                 controller: locationCtrl,
-                style: AppTextStyles.mono(13, AppColors.textPrimary),
+                style: AppTextStyles.mono(13, AppColors.textPrimary,weight: FontWeight.bold),
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: Colors.black.withValues(alpha: 0.2),
+                  fillColor: Colors.white24,
                   hintText: 'e.g. Backyard',
                   hintStyle: AppTextStyles.mono(13,
-                      AppColors.textPrimary.withValues(alpha: 0.3)),
+                      AppColors.textPrimary.withValues(alpha: 0.8)),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(
@@ -440,8 +441,8 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
               ),
               const SizedBox(height: 10),
               Text('DEVICE ID',
-                  style: AppTextStyles.mono(9,
-                      AppColors.textPrimary.withValues(alpha: 0.45),
+                  style: AppTextStyles.mono(11,
+                      AppColors.textPrimary.withValues(alpha: 0.8),
                       letterSpacing: 0.5)),
               const SizedBox(height: 4),
               Container(
@@ -449,14 +450,14 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.2),
+                  color: Colors.white24,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                       color: Colors.white.withValues(alpha: 0.08)),
                 ),
                 child: Text(device.deviceId,
                     style: AppTextStyles.mono(11,
-                        AppColors.textPrimary.withValues(alpha: 0.35))),
+                        AppColors.textPrimary.withValues(alpha: 0.8),weight: FontWeight.bold)),
               ),
               const SizedBox(height: 18),
               // Remove device button
@@ -468,14 +469,14 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                       context: context,
                       builder: (ctx) => AlertDialog(
                         backgroundColor: AppColors.deepGreen,
-                        title: Text('Remove Device',
+                        title: Text('REMOVE DEVICE',
                             style: AppTextStyles.headline(
                                 16, AppColors.textPrimary,
                                 weight: FontWeight.bold)),
                         content: Text(
                           'This will release "${device.name}" so it can be claimed by another user.',
                           style: AppTextStyles.mono(
-                              13, AppColors.textPrimary.withValues(alpha: 0.8)),
+                              13, AppColors.textPrimary,weight: FontWeight.w500),
                         ),
                         actions: [
                           TextButton(
@@ -521,7 +522,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.transparent,
+                      color: AppColors.darkBg,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                           color: Colors.redAccent.withValues(alpha: 0.6)),
@@ -576,7 +577,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                     ),
                     alignment: Alignment.center,
                     child: Text('SAVE CHANGES',
-                        style: AppTextStyles.headline(11, AppColors.deepGreen,
+                        style: AppTextStyles.headline(13, AppColors.deepGreen,
                             letterSpacing: 1.5, weight: FontWeight.w800)),
                   ),
                 ),
@@ -944,7 +945,7 @@ class _DeviceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onLongPress: onLongPress,
+      onTap: onLongPress,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
@@ -984,39 +985,58 @@ class _QrSlider extends StatefulWidget {
 
 class _QrSliderState extends State<_QrSlider> {
   double _dragX = 0;
-  bool _triggered = false;
+  bool _isDragging = false;
 
   static const double _trackW = 210;
   static const double _thumbW = 60;
   static const double _maxDrag = _trackW - _thumbW - 8;
 
   void _onDragUpdate(DragUpdateDetails d) {
-    if (_triggered || widget.isClaiming) return;
+    if (widget.isClaiming) return;
     setState(() {
+      _isDragging = true;
       _dragX = (_dragX + d.delta.dx).clamp(0, _maxDrag);
     });
   }
 
   void _onDragEnd(DragEndDetails d) {
-    if (_triggered || widget.isClaiming) return;
+    _isDragging = false;
+    if (widget.isClaiming) return;
+    
     if (_dragX >= _maxDrag * 0.80) {
-      setState(() => _triggered = true);
+      // Triggered — snap to end, call onTap, then animate back
+      setState(() => _dragX = _maxDrag);
       widget.onTap();
+      // Animate back after a short delay
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted && !_isDragging) {
+          _animateBack();
+        }
+      });
     } else {
-      setState(() => _dragX = 0);
+      _animateBack();
     }
   }
 
-  @override
-  void didUpdateWidget(covariant _QrSlider oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Reset when claim finishes (isClaiming goes true -> false)
-    if (oldWidget.isClaiming && !widget.isClaiming) {
+  void _animateBack() {
+    // Simple animation back to start
+    const duration = Duration(milliseconds: 200);
+    const steps = 10;
+    final stepSize = _dragX / steps;
+    
+    Timer.periodic(duration ~/ steps, (timer) {
+      if (!mounted || _isDragging) {
+        timer.cancel();
+        return;
+      }
       setState(() {
-        _dragX = 0;
-        _triggered = false;
+        _dragX -= stepSize;
+        if (_dragX <= 0) {
+          _dragX = 0;
+          timer.cancel();
+        }
       });
-    }
+    });
   }
 
   @override
@@ -1068,13 +1088,13 @@ class _QrSliderState extends State<_QrSlider> {
                       width: _thumbW,
                       height: 42,
                       decoration: BoxDecoration(
-                        color: _triggered
+                        color: _dragX >= _maxDrag * 0.80
                             ? const Color(0xFFE4F27A).withValues(alpha: 0.6)
                             : const Color(0xFFE4F27A),
                         borderRadius: BorderRadius.circular(22),
                       ),
                       child: Icon(
-                        _triggered
+                        _dragX >= _maxDrag * 0.80
                             ? Icons.qr_code_scanner_rounded
                             : Icons.arrow_forward_ios_rounded,
                         color: AppColors.deepGreen,

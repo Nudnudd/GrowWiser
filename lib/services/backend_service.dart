@@ -165,9 +165,10 @@ void _subscribeToDeviceInternal(String deviceId) {
 }
 
 void _onMqttConnected() {
+ _isIntentionalDisconnect = false;
   _reconnectAttempts = 0;
   _isReconnecting = false;
-  _logger.i('MQTT connected');
+    _logger.i('MQTT connected');  
 
   // Drain pending subscriptions
   final pending = _pendingSubscriptions.toList();
@@ -177,11 +178,31 @@ void _onMqttConnected() {
   }
 }
 
+bool _isIntentionalDisconnect = false;
+
+Future<void> disconnectMqtt() async {
+  _isIntentionalDisconnect = true;
+  _cancelReconnect();
+  _mqttClient?.disconnect();
+  _mqttClient = null;
+}
+
 void _onMqttDisconnected() {
+  // Don't reconnect if this was an intentional disconnect
+  if (_isIntentionalDisconnect) {
+    _logger.i('MQTT intentionally disconnected — not reconnecting');
+    return;
+  }
+  
+  // Don't reconnect if user logged out
+  if (_auth.currentUser == null) {
+    _logger.i('User logged out — not reconnecting MQTT');
+    return;
+  }
+  
   _logger.w('MQTT disconnected — scheduling reconnect...');
   _scheduleReconnect();
 }
-
 /// Call this when a new device is added (e.g. after claim)
 void subscribeToDeviceIfConnected(String deviceId) {
   if (mqttConnected) {
@@ -208,7 +229,7 @@ void subscribeToDeviceIfConnected(String deviceId) {
 
  Future<void> claimDevice({
   required String deviceId,
-  String? token,           // null = manual entry (bypasses QR token check)
+  String? token,
   required String name,
   required String location,
 }) async {
@@ -220,9 +241,8 @@ void subscribeToDeviceIfConnected(String deviceId) {
   await _firestore.runTransaction((tx) async {
     final snap = await tx.get(deviceRef);
 
-    // ─── Device must exist in Firestore registry ──────────────────────────
     if (!snap.exists) {
-      // Manual entry: auto-create registry entry if device doesn't exist yet
+      // Manual entry: auto-create registry entry
       if (token != null) {
         throw Exception('Device not found in registry.');
       }
@@ -237,22 +257,21 @@ void subscribeToDeviceIfConnected(String deviceId) {
         'registeredAt': FieldValue.serverTimestamp(),
       });
     } else {
-      // QR claim: existing device in registry
       final data = snap.data()!;
-
+      
       if (token != null) {
-        // Validate QR token
+        // QR claim: validate token
         if (data['claimToken'] != token) {
           throw Exception('Invalid device token.');
         }
-        // Must be unclaimed
         if ((data['claimedBy'] as String?)?.isNotEmpty == true) {
           throw Exception('This device is already claimed by another user.');
         }
       } else {
-        // Manual entry of existing device: check if already claimed
-        if ((data['claimedBy'] as String?)?.isNotEmpty == true) {
-          throw Exception('This device is already claimed.');
+        // Manual entry
+        final claimedBy = data['claimedBy'] as String?;
+        if (claimedBy != null && claimedBy.isNotEmpty && claimedBy != uid) {
+          throw Exception('This device is already claimed by another user.');
         }
       }
 
@@ -275,12 +294,13 @@ void subscribeToDeviceIfConnected(String deviceId) {
     tx.set(userDeviceRef, {'deviceId': deviceId});
   });
 
-  // ─── Mirror to RTDB (what the UI actually streams) ─────────────────────
-  final rtdbDeviceRef = FirebaseDatabase.instance.ref('Devices/$deviceId');
+  // Mirror to RTDB
+try {
+  final rtdbDeviceRef = _rtdb.child('Devices/$deviceId');
   final existingSnap = await rtdbDeviceRef.get();
 
   await rtdbDeviceRef.update({
-    'ownerId': uid,
+    'ownerId': uid,  
     'name': name,
     'location': location,
   });
@@ -300,11 +320,15 @@ void subscribeToDeviceIfConnected(String deviceId) {
     });
   }
 
-  await FirebaseDatabase.instance
-      .ref('UserDevices/$uid/$deviceId')
-      .set(true);
+  // This is the critical line that links device to user
+  await _rtdb.child('UserDevices/$uid/$deviceId').set(true);
+  _logger.i('✅ UserDevices link created: UserDevices/$uid/$deviceId = true');
 
-  _logger.i('Device $deviceId claimed${token != null ? " via QR" : " manually"} for $uid');
+} catch (e, st) {
+  _logger.e('❌ RTDB write failed during claim: $e');
+  _logger.e('Stack: $st');
+  rethrow; // Don't swallow this — let the UI know it failed
+}
 }
 
 /// Releases device — clears claimedBy so it's claimable again.
@@ -507,49 +531,53 @@ Future<void> releaseDevice({required String deviceId}) async {
         password: password);
   }
 
-  Future<void> _doConnect({
-    required String brokerHost,
-    int port = 1883,
-    String? username,
-    String? password,
-  }) async {
-    final clientId =
-        'growwiser_${currentUser?.uid ?? _uuid.v4()}';
-    _mqttClient = MqttServerClient(brokerHost, clientId)
-      ..port = port
-      ..keepAlivePeriod = 60
-      ..onDisconnected = _onMqttDisconnected
-      ..onConnected = _onMqttConnected
-      ..logging(on: false);
+String? _stableClientId;
 
-    if (username != null) {
-      _mqttClient!.connectionMessage = MqttConnectMessage()
-          .withClientIdentifier(clientId)
-          .authenticateAs(username, password ?? '')
-          .startClean();
-    }
+Future<void> _doConnect({
+  required String brokerHost,
+  int port = 1883,
+  String? username,
+  String? password,
+}) async {
+  // Use stable client ID — only generate once per app session
+  _stableClientId ??= 'growwiser_${currentUser?.uid ?? _uuid.v4()}';
+  
+  
+  final clientId = _stableClientId!;
+  
+  _mqttClient = MqttServerClient(brokerHost, clientId)
+    ..port = port
+    ..keepAlivePeriod = 60
+    ..onDisconnected = _onMqttDisconnected
+    ..onConnected = _onMqttConnected
+    ..logging(on: false);
 
-    try {
-      await _mqttClient!.connect();
-    } on NoConnectionException catch (e) {
-      _logger.e('MQTT connection failed: $e');
-      rethrow;
-    } on SocketException catch (e) {
-      _logger.e('MQTT socket error: $e');
-      rethrow;
-    }
+  if (username != null) {
+    _mqttClient!.connectionMessage = MqttConnectMessage()
+        .withClientIdentifier(clientId)  
+        .authenticateAs(username, password ?? '')
+        .startClean();
   }
+
+  try {
+    await _mqttClient!.connect();
+  } on NoConnectionException catch (e) {
+    _logger.e('MQTT connection failed: $e');
+    rethrow;
+  } on SocketException catch (e) {
+    _logger.e('MQTT socket error: $e');
+    rethrow;
+  }
+}
 
   // ─── Exponential backoff reconnect ────────────────────────────────────────
   void _scheduleReconnect() {
     if (_isReconnecting) return;
     if (_lastBrokerHost == null) return;
-    if (_reconnectAttempts >= _maxReconnectAttempts) {
-      _logger.e(
-          'MQTT max reconnect attempts ($_maxReconnectAttempts) reached. Giving up.');
-      return;
-    }
-
+    if (mqttConnected) {
+    _logger.i('Already connected — skipping reconnect');
+    return;
+  }
     _isReconnecting = true;
     // Backoff: 2s, 4s, 8s, 16s, 32s
     final delay =
@@ -884,11 +912,7 @@ Future<Map<String, dynamic>?> geocodeCity(String cityName) async {
     _logger.d('MQTT publish [$topic]: $payload');
   }
 
-  Future<void> _disconnectMqtt() async {
-    _cancelReconnect();
-    _mqttClient?.disconnect();
-    _mqttClient = null;
-  }
+ 
 
 // ══════════════════════════════════════════════════════════════════════════
 // MOISTURE BASED NEXT WATER CALCULATIONS AND SNAPSHOT
@@ -1155,4 +1179,5 @@ Future<void> handleIncomingMqttMessage(String topic, String payload) async {
     }
   }
 }
+
 }
