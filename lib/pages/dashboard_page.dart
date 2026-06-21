@@ -92,6 +92,30 @@ final nextWaterAsync = ref.watch(nextWaterProvider(_activeDeviceId ?? 'no-device
   
   final allDevicesAsync = ref.watch(allDevicesSensorProvider);
 
+  
+  final zoneDevices = allDevicesAsync.when(
+    data: (allDevices) => allDevices,
+    loading: () =>
+        <(DeviceModel, SensorData?)>[],
+    error: (_, __) =>
+        <(DeviceModel, SensorData?)>[],
+  );
+
+   // Compute avg moisture across all devices
+  final avgMoisture = allDevicesAsync.when(
+    data: (allDevices) {
+      final moistures = allDevices
+          .map((e) => e.$2?.moisture)
+          .whereType<double>()
+          .toList();
+      return moistures.isEmpty
+          ? null // null = fall back to single device moisture
+          : moistures.reduce((a, b) => a + b) / moistures.length;
+    },
+    loading: () => null,
+    error: (_, __) => null,
+  );
+
   return Scaffold(
     backgroundColor: AppColors.black,
     bottomNavigationBar: GrowWiserNavBar(
@@ -161,30 +185,11 @@ final nextWaterAsync = ref.watch(nextWaterProvider(_activeDeviceId ?? 'no-device
                                     error: (_, __) => '—',
                                   ) ??
                                   '—';
-                              // Compute avg moisture across all devices
-                              final avg = allDevicesAsync.when(
-                                data: (allDevices) {
-                                  final moistures = allDevices
-                                      .map((e) => e.$2?.moisture)
-                                      .whereType<double>()
-                                      .toList();
-                                  return moistures.isEmpty
-                                      ? sensorData.moisture
-                                      : moistures.reduce((a, b) => a + b) /
-                                          moistures.length;
-                                },
-                                loading: () => sensorData.moisture,
-                                error: (_, __) => sensorData.moisture,
-                              );
 
-                              // Zone bars data
-                              final zoneDevices = allDevicesAsync.when(
-                                data: (allDevices) => allDevices,
-                                loading: () =>
-                                    <(DeviceModel, SensorData?)>[],
-                                error: (_, __) =>
-                                    <(DeviceModel, SensorData?)>[],
-                              );
+                                  final avg = avgMoisture ?? sensorData.moisture;
+                             
+
+                             
 
                               return SingleChildScrollView(
                                 padding: const EdgeInsets.all(8),

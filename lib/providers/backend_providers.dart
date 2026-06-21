@@ -6,6 +6,8 @@ import '../models/sensor_data.dart';
 import '../services/backend_service.dart';
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
+import 'package:rxdart/rxdart.dart';
+import 'dart:async';
 
 // Auth state stream
 final authStateProvider = StreamProvider<User?>((ref) {
@@ -66,20 +68,50 @@ final deviceConfigProvider =
 });
 
 // Fetches latest sensor snapshot for all devices once
-final allDevicesSensorProvider = FutureProvider<List<(DeviceModel, SensorData?)>>((ref) async {
-  final devices = await ref.read(userDevicesProvider.future);
-  final results = <(DeviceModel, SensorData?)>[];
-  for (final device in devices) {
-  try{
-    final sensor = await BackendService().fetchLatestSensorData(device.deviceId).timeout(const Duration(seconds: 5));
-    results.add((device, sensor));
-  } catch (_) {
-      // No sensor data yet for this device — show null gracefully
-      results.add((device, null));
-  }
-  }
+final allDevicesSensorProvider = StreamProvider<List<(DeviceModel, SensorData?)>>((ref) {
+  late StreamController<List<(DeviceModel, SensorData?)>> controller;
+  final subs = <StreamSubscription<void>>[];
 
-  return results;
+  controller = StreamController<List<(DeviceModel, SensorData?)>>.broadcast(
+    onListen: () async {
+      final devices = await ref.watch(userDevicesProvider.future);
+
+      if (devices.isEmpty) {
+        controller.add([]);
+        return;
+      }
+
+      final latest = List<SensorData?>.filled(devices.length, null);
+
+      for (int i = 0; i < devices.length; i++) {
+        final idx = i;
+        final sub = BackendService()
+            .watchSensorData(devices[idx].deviceId)
+            .listen(
+              (sensor) {
+                latest[idx] = sensor;
+                if (!controller.isClosed) {
+                  controller.add(
+                    List<(DeviceModel, SensorData?)>.generate(
+                      devices.length,
+                      (j) => (devices[j], latest[j]),
+                    ),
+                  );
+                }
+              },
+              onError: (e) => controller.addError(e),
+            );
+        subs.add(sub);
+      }
+    },
+  );
+
+  ref.onDispose(() {
+    for (final sub in subs) sub.cancel();
+    controller.close();
+  });
+
+  return controller.stream;
 });
 
 
