@@ -23,7 +23,9 @@ crash_log.txt
 crash_only.txt
 flutter_log*.txt
 
-# Secrets (uncomment if you want to hide API keys)
-# google-services.json
-# GoogleService-Info.plist
-# firebase_options.dart
+# Secrets
+google-services.json
+GoogleService-Info.plist
+.env
+.env.*
+serviceAccountKey.json
